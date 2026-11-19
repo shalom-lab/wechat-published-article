@@ -75,6 +75,29 @@ body {
   margin: 6px 0 0;
 }
 
+.mp-status {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid var(--line);
+  background: #f7faf8;
+  color: var(--muted);
+}
+
+.mp-status.ok {
+  border-color: #b7e4c7;
+  background: #eefaf3;
+  color: #0a5c34;
+}
+
+.mp-status.bad {
+  border-color: #f0c7c2;
+  background: #fff5f3;
+  color: #8f2d24;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -273,6 +296,7 @@ kbd {
   font-size: 12.5px;
   line-height: 1.55;
   color: var(--muted);
+  white-space: pre-line;
 }
 
 .dialog-actions {

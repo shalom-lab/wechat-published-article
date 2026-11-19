@@ -14,12 +14,13 @@
           <button type="button" class="tab" data-view="settings" id="tab-settings">设置</button>
         </nav>
       </div>
-      <p class="sub">登录公众号后台后增量同步到 GitHub</p>
+      <p class="sub">需在已登录的 <code>mp.weixin.qq.com</code> 后台页使用</p>
     </header>
 
     <section id="view-sync" class="view">
       <section class="card">
         <h2>同步</h2>
+        <p id="mp-status" class="mp-status" role="status">正在检查公众号后台页…</p>
         <p class="hint">快捷键默认 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></p>
         <div class="row">
           <button id="btn-sync" class="primary" type="button">增量同步</button>

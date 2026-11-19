@@ -28,9 +28,85 @@ const dialogBody = document.getElementById("dialog-body")!;
 const dialogOk = document.getElementById("dialog-ok") as HTMLButtonElement;
 const dialogCancel = document.getElementById("dialog-cancel") as HTMLButtonElement;
 const toastEl = document.getElementById("toast")!;
+const mpStatusEl = document.getElementById("mp-status")!;
+
+const MP_ORIGIN = "https://mp.weixin.qq.com";
 
 let toastTimer: number | undefined;
 let dialogResolver: ((ok: boolean) => void) | null = null;
+
+type MpContext = {
+  hasMp: boolean;
+  activeIsMp: boolean;
+  url: string;
+};
+
+async function getMpContext(): Promise<MpContext> {
+  const [active] = await browser.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  const activeUrl = String(active?.url || "");
+  const activeIsMp = activeUrl.startsWith(MP_ORIGIN);
+  if (activeIsMp) {
+    return { hasMp: true, activeIsMp: true, url: activeUrl };
+  }
+  const tabs = await browser.tabs.query({ url: [`${MP_ORIGIN}/*`] });
+  const first = tabs[0];
+  return {
+    hasMp: Boolean(first),
+    activeIsMp: false,
+    url: String(first?.url || ""),
+  };
+}
+
+async function refreshMpStatus(opts?: { toastIfMissing?: boolean }) {
+  try {
+    const ctx = await getMpContext();
+    if (ctx.activeIsMp) {
+      mpStatusEl.textContent = `当前前台页已是公众号后台（${MP_ORIGIN}）`;
+      mpStatusEl.className = "mp-status ok";
+      return ctx;
+    }
+    if (ctx.hasMp) {
+      mpStatusEl.textContent =
+        "已检测到公众号后台标签页；同步时会优先使用该页登录态（建议切到该标签）。";
+      mpStatusEl.className = "mp-status ok";
+      return ctx;
+    }
+    mpStatusEl.textContent = `未检测到 ${MP_ORIGIN}。请先打开并登录公众号后台，再同步。`;
+    mpStatusEl.className = "mp-status bad";
+    if (opts?.toastIfMissing) {
+      showToast(`请先打开并登录 ${MP_ORIGIN}`, "bad");
+    }
+    return ctx;
+  } catch {
+    mpStatusEl.textContent = `无法检查标签页，请确认已打开并登录 ${MP_ORIGIN}`;
+    mpStatusEl.className = "mp-status bad";
+    return { hasMp: false, activeIsMp: false, url: "" };
+  }
+}
+
+async function confirmMpBeforeSync(mode: "incremental" | "full") {
+  const ctx = await refreshMpStatus();
+  const pageLine = ctx.activeIsMp
+    ? "当前前台页已是公众号后台。"
+    : ctx.hasMp
+      ? "已找到公众号后台标签页（不一定是当前前台页）。"
+      : `尚未检测到 ${MP_ORIGIN} 标签页。`;
+  const ok = await askConfirm({
+    title: mode === "full" ? "开始全量刷新？" : "开始增量同步？",
+    body:
+      `${pageLine}\n\n` +
+      `请确认已在浏览器打开并登录 ${MP_ORIGIN}（公众号后台）。` +
+      (mode === "full"
+        ? "\n全量会重新翻完整发表记录，可能较慢。"
+        : "\n增量会按发表记录往前翻，遇到已同步内容可早停。"),
+    okText: mode === "full" ? "开始全量" : "开始同步",
+    danger: !ctx.hasMp,
+  });
+  return ok;
+}
 
 function appendLog(line: string) {
   const t = new Date().toLocaleTimeString();
@@ -238,16 +314,22 @@ tabSync.addEventListener("click", () => showView("sync"));
 tabSettings.addEventListener("click", () => showView("settings"));
 btnSave.addEventListener("click", onSave);
 btnClear.addEventListener("click", onClear);
-btnSync.addEventListener("click", () => onSync("incremental"));
+btnSync.addEventListener("click", async () => {
+  if (!(await confirmMpBeforeSync("incremental"))) return;
+  onSync("incremental");
+});
 btnFull.addEventListener("click", async () => {
-  const ok = await askConfirm({
-    title: "开始全量刷新？",
-    body: "会重新翻完整发表记录，可能较慢，适合补齐内容类型等新字段。确认后开始。",
-    okText: "开始全量",
-  });
-  if (!ok) return;
+  if (!(await confirmMpBeforeSync("full"))) return;
   onSync("full");
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshMpStatus();
+});
+window.addEventListener("focus", () => {
+  refreshMpStatus();
 });
 
 hydrateByok();
 showView("sync");
+refreshMpStatus({ toastIfMissing: true });
