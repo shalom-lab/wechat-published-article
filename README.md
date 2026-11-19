@@ -18,6 +18,7 @@
 - **账号防串台**：同步前先请求设置页，读取 **公众号ID** + **名称**；目录只用 ID（如 `epi-stats`），中文名称不入路径
 - **BYOK**：侧栏填写自己的 `owner/repo` 与 GitHub PAT，密钥留在本机插件存储
 - **每账号独立目录**：`accounts/<公众号ID>/catalog.json|csv` + `meta.json`，根目录 `index.json` 索引
+- **内容形态**：同步写入 `item_show_type`（图文 / 贴图 / 视频 / 音频 / 短文本等）及封面、摘要
 
 ## 🚀 快速开始
 
@@ -86,6 +87,20 @@ accounts/epi-stats/
 | `utils/merge.ts` | 目录合并与防串台校验 |
 | `utils/github.ts` | Contents API 读写 |
 | `utils/byok.ts` | 密钥读写 |
+
+## 🧾 内容形态（`item_show_type`）
+
+| 值 | `content_type_label` |
+|----|----------------------|
+| `0` | 图文 |
+| `5` | 视频 |
+| `7` | 音频 |
+| `8` | 贴图 |
+| `10` | 短文本 |
+| `11` | 转载 |
+| 其他 | `类型N` |
+
+另同步 `cover` / `digest` / `author`。旧目录需对该账号做一次**全量刷新**才会补齐历史条目。
 
 ## ⚠️ 注意
 

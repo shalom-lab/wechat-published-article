@@ -88,6 +88,13 @@ export function mergeCatalog(
           row.urlKind === "short" || !old.content_url
             ? row.content_url
             : old.content_url,
+        cover: row.cover || old.cover || null,
+        digest: row.digest || old.digest || null,
+        author: row.author || old.author || null,
+        item_show_type:
+          row.item_show_type != null ? row.item_show_type : old.item_show_type ?? null,
+        content_type_label:
+          row.content_type_label || old.content_type_label || "",
       });
       updated += 1;
     }

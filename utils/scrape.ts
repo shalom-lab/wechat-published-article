@@ -11,6 +11,12 @@ export type ArticleRow = {
   itemidx: number;
   publish_type: number | null;
   publish_type_label: string;
+  /** 内容形态：0 图文 / 5 视频 / 7 音频 / 8 贴图 / 10 短文本 / 11 转载 … */
+  item_show_type: number | null;
+  content_type_label: string;
+  cover: string | null;
+  digest: string | null;
+  author: string | null;
   group_index?: number;
   position?: number;
   _key?: string;
@@ -209,6 +215,23 @@ export const SCRAPE_SOURCE = `async (opts = {}) => {
     if (t === 101) return "群发";
     return t == null ? "" : String(t);
   }
+  function contentTypeLabel(t) {
+    const n = t == null || t === "" ? null : Number(t);
+    if (n == null || !Number.isFinite(n)) return "";
+    const map = {
+      0: "图文",
+      5: "视频",
+      7: "音频",
+      8: "贴图",
+      10: "短文本",
+      11: "转载",
+    };
+    return map[n] || ("类型" + n);
+  }
+  function pickCover(a) {
+    const raw = a.cover || a.cdn_url || a.cdn_url_1_1 || a.cover_img || "";
+    return decodeHtml(raw).trim() || null;
+  }
   function toIso(ts) {
     const n = Number(ts);
     if (!Number.isFinite(n) || n <= 0) return null;
@@ -266,6 +289,10 @@ export const SCRAPE_SOURCE = `async (opts = {}) => {
       (info?.appmsg_info || []).forEach((a, pos) => {
         const content_url = normalizeUrl(a.content_url || "");
         const ts = a?.line_info?.send_time || groupTime || info?.publish_info?.create_time || null;
+        const showType =
+          a.item_show_type != null && a.item_show_type !== ""
+            ? Number(a.item_show_type)
+            : null;
         const row = {
           title: decodeHtml(a.title || "").trim(),
           publishedAt: toIso(ts),
@@ -279,6 +306,11 @@ export const SCRAPE_SOURCE = `async (opts = {}) => {
           itemidx: a.itemidx ?? pos + 1,
           publish_type: publishType,
           publish_type_label: publishTypeLabel(publishType),
+          item_show_type: Number.isFinite(showType) ? showType : null,
+          content_type_label: contentTypeLabel(showType),
+          cover: pickCover(a),
+          digest: decodeHtml(a.digest || "").trim() || null,
+          author: decodeHtml(a.author_name || a.author || "").trim() || null,
           group_index: begin + groupOffset,
           position: pos,
         };
@@ -324,6 +356,11 @@ export function toCsv(articles: ArticleRow[]) {
     "urlKind",
     "publish_type",
     "publish_type_label",
+    "item_show_type",
+    "content_type_label",
+    "cover",
+    "digest",
+    "author",
     "is_deleted",
     "private_type",
     "msgid",
@@ -341,6 +378,11 @@ export function toCsv(articles: ArticleRow[]) {
         a.urlKind,
         a.publish_type,
         a.publish_type_label,
+        a.item_show_type,
+        a.content_type_label,
+        a.cover,
+        a.digest,
+        a.author,
         a.is_deleted,
         a.private_type,
         a.msgid,

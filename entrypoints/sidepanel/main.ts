@@ -22,6 +22,15 @@ const viewSync = document.getElementById("view-sync")!;
 const viewSettings = document.getElementById("view-settings")!;
 const tabSync = document.getElementById("tab-sync") as HTMLButtonElement;
 const tabSettings = document.getElementById("tab-settings") as HTMLButtonElement;
+const dialogRoot = document.getElementById("dialog-root")!;
+const dialogTitle = document.getElementById("dialog-title")!;
+const dialogBody = document.getElementById("dialog-body")!;
+const dialogOk = document.getElementById("dialog-ok") as HTMLButtonElement;
+const dialogCancel = document.getElementById("dialog-cancel") as HTMLButtonElement;
+const toastEl = document.getElementById("toast")!;
+
+let toastTimer: number | undefined;
+let dialogResolver: ((ok: boolean) => void) | null = null;
 
 function appendLog(line: string) {
   const t = new Date().toLocaleTimeString();
@@ -41,6 +50,42 @@ function showView(name: "sync" | "settings") {
   viewSettings.hidden = isSync;
   tabSync.classList.toggle("active", isSync);
   tabSettings.classList.toggle("active", !isSync);
+}
+
+function showToast(message: string, kind: "ok" | "bad" | "" = "") {
+  toastEl.hidden = false;
+  toastEl.textContent = message;
+  toastEl.className = `toast${kind ? ` ${kind}` : ""}`;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toastEl.hidden = true;
+  }, 3200);
+}
+
+function closeDialog(ok: boolean) {
+  dialogRoot.hidden = true;
+  const resolve = dialogResolver;
+  dialogResolver = null;
+  resolve?.(ok);
+}
+
+function askConfirm(options: {
+  title: string;
+  body: string;
+  okText?: string;
+  cancelText?: string;
+  danger?: boolean;
+}) {
+  dialogTitle.textContent = options.title;
+  dialogBody.textContent = options.body;
+  dialogOk.textContent = options.okText || "继续";
+  dialogCancel.textContent = options.cancelText || "取消";
+  dialogOk.className = options.danger ? "danger ghost" : "primary";
+  dialogRoot.hidden = false;
+  dialogOk.focus();
+  return new Promise<boolean>((resolve) => {
+    dialogResolver = resolve;
+  });
 }
 
 function showLinks(summary: SyncSummary) {
@@ -83,9 +128,11 @@ async function onSave() {
     statusEl.textContent = `已保存：${saved.repo} / ${maskToken(saved.token)}`;
     statusEl.className = "status ok";
     appendLog("GitHub 配置已写入插件 localStorage");
+    showToast("GitHub 配置已保存", "ok");
   } catch (err) {
     statusEl.textContent = err instanceof Error ? err.message : String(err);
     statusEl.className = "status bad";
+    showToast(err instanceof Error ? err.message : String(err), "bad");
   } finally {
     btnSave.textContent = "保存";
     btnSave.disabled = false;
@@ -93,13 +140,20 @@ async function onSave() {
 }
 
 async function onClear() {
-  if (!confirm("确定清除本机保存的 GitHub 仓库和 Token？")) return;
+  const ok = await askConfirm({
+    title: "清除本机密钥？",
+    body: "将删除插件里保存的 GitHub 仓库与 Token，不影响远端仓库数据。",
+    okText: "清除",
+    danger: true,
+  });
+  if (!ok) return;
   await clearByok();
   repoEl.value = "";
   tokenEl.value = "";
   statusEl.textContent = "未设置";
   statusEl.className = "status";
   appendLog("已清除 BYOK");
+  showToast("已清除本机密钥", "ok");
 }
 
 async function onSync(mode: "incremental" | "full") {
@@ -108,6 +162,7 @@ async function onSync(mode: "incremental" | "full") {
     showView("settings");
     statusEl.textContent = "请先填写并保存 GitHub 仓库和 Token";
     statusEl.className = "status bad";
+    showToast("请先在设置里保存 GitHub 配置", "bad");
     return;
   }
 
@@ -124,17 +179,39 @@ async function onSync(mode: "incremental" | "full") {
       | { ok: false; error: string };
     if (!res?.ok) throw new Error(("error" in res && res.error) || "同步失败");
     const s = res.summary;
-    appendLog(
+    const doneLine =
       `完成：${s.account?.nickname || s.account?.id}（${s.account?.alias || s.account?.id}）新增 ${s.added}，合计 ${s.total}` +
-        (s.stoppedEarly ? "（增量早停）" : ""),
-    );
+      (s.stoppedEarly ? "（增量早停）" : "");
+    appendLog(doneLine);
     showLinks(s);
+    showToast(
+      mode === "full"
+        ? `全量完成 · ${s.account.alias || s.account.id} · 合计 ${s.total}`
+        : `增量完成 · 新增 ${s.added} · 合计 ${s.total}`,
+      "ok",
+    );
   } catch (err) {
-    appendLog(`失败：${err instanceof Error ? err.message : String(err)}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    appendLog(`失败：${msg}`);
+    showToast(msg, "bad");
   } finally {
     setBusy(false);
   }
 }
+
+dialogCancel.addEventListener("click", () => closeDialog(false));
+dialogOk.addEventListener("click", () => closeDialog(true));
+dialogRoot.addEventListener("click", (e) => {
+  const t = e.target as HTMLElement | null;
+  if (t?.hasAttribute("data-dialog-dismiss")) closeDialog(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (dialogRoot.hidden) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeDialog(false);
+  }
+});
 
 browser.runtime.onMessage.addListener((msg) => {
   if (!msg || typeof msg !== "object") return;
@@ -144,10 +221,16 @@ browser.runtime.onMessage.addListener((msg) => {
     summary?: SyncSummary;
   };
   if (m.type === "wpa:progress" && m.message) appendLog(m.message);
-  if (m.type === "wpa:error" && m.message) appendLog(`失败：${m.message}`);
-  // 侧栏按钮同步已在 onSync 里处理结果；这里只承接快捷键触发的完成态
+  if (m.type === "wpa:error" && m.message) {
+    appendLog(`失败：${m.message}`);
+    showToast(m.message, "bad");
+  }
   if (m.type === "wpa:done" && m.summary && btnSync.disabled === false) {
     showLinks(m.summary);
+    showToast(
+      `同步完成 · 新增 ${m.summary.added} · 合计 ${m.summary.total}`,
+      "ok",
+    );
   }
 });
 
@@ -156,8 +239,13 @@ tabSettings.addEventListener("click", () => showView("settings"));
 btnSave.addEventListener("click", onSave);
 btnClear.addEventListener("click", onClear);
 btnSync.addEventListener("click", () => onSync("incremental"));
-btnFull.addEventListener("click", () => {
-  if (!confirm("全量会重新翻完整发表记录，可能较慢。继续？")) return;
+btnFull.addEventListener("click", async () => {
+  const ok = await askConfirm({
+    title: "开始全量刷新？",
+    body: "会重新翻完整发表记录，可能较慢，适合补齐内容类型等新字段。确认后开始。",
+    okText: "开始全量",
+  });
+  if (!ok) return;
   onSync("full");
 });
 
