@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>发表记录同步</title>
+  </head>
+  <body>
+    <header class="header">
+      <div class="header-top">
+        <h1>发表记录同步</h1>
+        <nav class="tabs" aria-label="侧栏切换">
+          <button type="button" class="tab active" data-view="sync" id="tab-sync">同步</button>
+          <button type="button" class="tab" data-view="settings" id="tab-settings">设置</button>
+        </nav>
+      </div>
+      <p class="sub">登录公众号后台后增量同步到 GitHub</p>
+    </header>
+
+    <section id="view-sync" class="view">
+      <section class="card">
+        <h2>同步</h2>
+        <p class="hint">快捷键默认 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></p>
+        <div class="row">
+          <button id="btn-sync" class="primary" type="button">增量同步</button>
+          <button id="btn-full" class="ghost" type="button">全量刷新</button>
+        </div>
+        <pre id="log" class="log" aria-live="polite"></pre>
+        <div id="links" class="links" hidden></div>
+      </section>
+      <p class="foot">仓库目录：<code>accounts/&lt;公众号ID&gt;/</code>（如 <code>accounts/epi-stats/</code>）</p>
+    </section>
+
+    <section id="view-settings" class="view" hidden>
+      <section class="card">
+        <h2>GitHub BYOK</h2>
+        <p class="hint">
+          键名：<code>gh-wpa-repo</code> / <code>gh-wpa-token</code>。写入<strong>本插件</strong>的
+          <code>localStorage</code>（不是微信后台网页）。保存时测连，通过才落盘；后台同步会从插件存储读取。
+        </p>
+        <label>
+          仓库
+          <input id="repo" type="text" placeholder="owner/name" autocomplete="off" />
+        </label>
+        <label>
+          Token
+          <input id="token" type="password" placeholder="ghp_…" autocomplete="off" />
+        </label>
+        <p id="byok-status" class="status">未设置</p>
+        <div class="row">
+          <button id="btn-save" class="primary" type="button">保存</button>
+          <button id="btn-clear" class="danger ghost" type="button">清除</button>
+        </div>
+      </section>
+    </section>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

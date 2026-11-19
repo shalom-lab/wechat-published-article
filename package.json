@@ -1,0 +1,21 @@
+{
+  "name": "wechat-published-article",
+  "version": "1.0.0",
+  "description": "Chrome MV3 插件：在你**已登录**的微信公众号后台，把「发表记录」增量同步到自己的 GitHub 仓库（BYOK）。",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wxt": "^0.21.5"
+  },
+  "type": "module"
+}
