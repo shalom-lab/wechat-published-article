@@ -6,6 +6,7 @@
 
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/)
 [![WXT](https://img.shields.io/badge/WXT-0.21-blue)](https://wxt.dev/)
+[![Release](https://img.shields.io/github/v/release/shalom-lab/wechat-published-article)](https://github.com/shalom-lab/wechat-published-article/releases/latest)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](package.json)
 
 </div>
@@ -20,22 +21,24 @@
 
 ## 🚀 快速开始
 
+### 从 Release 安装（推荐）
+
+1. 打开 [Releases](https://github.com/shalom-lab/wechat-published-article/releases/latest)，下载 `wechat-published-article-*-chrome.zip`
+2. 解压到任意目录
+3. `chrome://extensions` → 开发者模式 → **加载已解压的扩展** → 选解压后的文件夹
+4. 侧栏「设置」填写 GitHub 仓库与 Token → 登录 [公众号后台](https://mp.weixin.qq.com) → 「增量同步」
+
+快捷键默认 `Alt+Shift+U`。
+
+### 本地构建
+
 ```bash
 npm install
 npm run build        # 产出 .output/chrome-mv3
+npm run zip          # 产出 .output/wechat-published-article-<ver>-chrome.zip
 ```
 
-1. `chrome://extensions` → 开发者模式 → 加载已解压的扩展 → 选 `.output/chrome-mv3`
-2. 打开侧栏「设置」，填写仓库与 Token 并保存（会测连 GitHub）
-3. 浏览器登录 [公众号后台](https://mp.weixin.qq.com)
-4. 侧栏点「增量同步」，或快捷键 `Alt+Shift+U`
-
-开发热重载：
-
-```bash
-npm run dev
-```
-
+开发热重载：`npm run dev`
 ## 📖 账号标识
 
 同步**开始前**会用当前后台 `token` 请求：
@@ -97,6 +100,18 @@ accounts/epi-stats/
 | `npm run dev` | WXT 开发模式 |
 | `npm run build` | 生产构建 → `.output/chrome-mv3` |
 | `npm run zip` | 打包 zip |
+
+## 📦 发版（CI/CD）
+
+推送符合 `v*` 的 tag 即触发 [Release workflow](.github/workflows/release.yml)：安装依赖 → 按 tag 同步版本 → `npm run zip` → 创建 GitHub Release 并挂上 zip。
+
+```bash
+# 例：发 v1.0.0
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+也可在 Actions 里用 `workflow_dispatch` 指定已有 tag 补发。
 
 ---
 
