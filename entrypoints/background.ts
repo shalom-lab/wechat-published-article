@@ -11,6 +11,9 @@ export default defineBackground(() => {
 
   async function runSync(mode: "incremental" | "full" = "incremental") {
     const logs: string[] = [];
+    browser.runtime
+      .sendMessage({ type: "wpa:start", mode })
+      .catch(() => {});
     try {
       const summary = await syncPublishCatalog({
         mode,

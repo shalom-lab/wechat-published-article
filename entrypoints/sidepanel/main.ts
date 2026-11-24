@@ -16,6 +16,7 @@ const repoEl = document.getElementById("repo") as HTMLInputElement;
 const tokenEl = document.getElementById("token") as HTMLInputElement;
 const btnSync = document.getElementById("btn-sync") as HTMLButtonElement;
 const btnFull = document.getElementById("btn-full") as HTMLButtonElement;
+const btnClearLog = document.getElementById("btn-clear-log") as HTMLButtonElement;
 const btnSave = document.getElementById("btn-save") as HTMLButtonElement;
 const btnClear = document.getElementById("btn-clear") as HTMLButtonElement;
 const viewSync = document.getElementById("view-sync")!;
@@ -31,9 +32,35 @@ const toastEl = document.getElementById("toast")!;
 const mpStatusEl = document.getElementById("mp-status")!;
 
 const MP_ORIGIN = "https://mp.weixin.qq.com";
+const LOG_KEY = "wpa-last-log";
+const SUMMARY_KEY = "wpa-last-summary";
 
 let toastTimer: number | undefined;
 let dialogResolver: ((ok: boolean) => void) | null = null;
+let lastSummary: SyncSummary | null = null;
+let syncUiOwned = false;
+
+function persistSession() {
+  localStorage.setItem(LOG_KEY, logEl.textContent || "");
+  if (lastSummary) {
+    localStorage.setItem(SUMMARY_KEY, JSON.stringify(lastSummary));
+  } else {
+    localStorage.removeItem(SUMMARY_KEY);
+  }
+}
+
+function clearSessionUi(opts?: { persist?: boolean }) {
+  logEl.textContent = "";
+  linksEl.hidden = true;
+  linksEl.innerHTML = "";
+  lastSummary = null;
+  if (opts?.persist !== false) persistSession();
+}
+
+function beginNewSyncSession(mode: "incremental" | "full") {
+  clearSessionUi({ persist: true });
+  appendLog(mode === "full" ? "开始全量刷新…" : "开始增量同步…");
+}
 
 type MpContext = {
   hasMp: boolean;
@@ -112,6 +139,7 @@ function appendLog(line: string) {
   const t = new Date().toLocaleTimeString();
   logEl.textContent += `[${t}] ${line}\n`;
   logEl.scrollTop = logEl.scrollHeight;
+  persistSession();
 }
 
 function setBusy(busy: boolean) {
@@ -166,6 +194,7 @@ function askConfirm(options: {
 
 function showLinks(summary: SyncSummary) {
   const { urls, account, paths } = summary;
+  lastSummary = summary;
   linksEl.hidden = false;
   linksEl.innerHTML = `
     <div class="links-title">仓库文件（可点击）</div>
@@ -176,6 +205,35 @@ function showLinks(summary: SyncSummary) {
     <a href="${urls.accountDir}" target="_blank" rel="noreferrer">打开目录</a>
     <div class="links-path">${paths.catalogPath}</div>
   `;
+  persistSession();
+}
+
+function hydrateSession() {
+  const savedLog = localStorage.getItem(LOG_KEY) || "";
+  logEl.textContent = savedLog;
+  if (savedLog) logEl.scrollTop = logEl.scrollHeight;
+  const raw = localStorage.getItem(SUMMARY_KEY);
+  if (!raw) return;
+  try {
+    const summary = JSON.parse(raw) as SyncSummary;
+    if (summary?.urls?.catalogJson && summary?.account) {
+      showLinks(summary);
+    }
+  } catch {
+    localStorage.removeItem(SUMMARY_KEY);
+  }
+}
+
+async function onClearLog() {
+  const ok = await askConfirm({
+    title: "清空日志与链接？",
+    body: "会清除侧栏里上次同步的日志和仓库链接，不影响 GitHub 仓库数据。",
+    okText: "清空",
+    danger: true,
+  });
+  if (!ok) return;
+  clearSessionUi({ persist: true });
+  showToast("已清空日志与链接", "ok");
 }
 
 async function hydrateByok() {
@@ -242,10 +300,9 @@ async function onSync(mode: "incremental" | "full") {
     return;
   }
 
+  syncUiOwned = true;
   setBusy(true);
-  linksEl.hidden = true;
-  linksEl.innerHTML = "";
-  appendLog(mode === "full" ? "开始全量刷新…" : "开始增量同步…");
+  beginNewSyncSession(mode);
   try {
     const res = (await browser.runtime.sendMessage({
       type: "wpa:sync",
@@ -272,6 +329,7 @@ async function onSync(mode: "incremental" | "full") {
     showToast(msg, "bad");
   } finally {
     setBusy(false);
+    syncUiOwned = false;
   }
 }
 
@@ -293,20 +351,33 @@ browser.runtime.onMessage.addListener((msg) => {
   if (!msg || typeof msg !== "object") return;
   const m = msg as {
     type?: string;
+    mode?: string;
     message?: string;
     summary?: SyncSummary;
   };
+  if (m.type === "wpa:start") {
+    // 侧栏自己发起的同步已 beginNewSyncSession；快捷键触发时在这里替换旧日志
+    if (!syncUiOwned) {
+      beginNewSyncSession(m.mode === "full" ? "full" : "incremental");
+      setBusy(true);
+    }
+    return;
+  }
   if (m.type === "wpa:progress" && m.message) appendLog(m.message);
+  // 侧栏按钮路径由 onSync 负责收尾；快捷键路径靠消息更新 UI
+  if (syncUiOwned) return;
   if (m.type === "wpa:error" && m.message) {
     appendLog(`失败：${m.message}`);
     showToast(m.message, "bad");
+    setBusy(false);
   }
-  if (m.type === "wpa:done" && m.summary && btnSync.disabled === false) {
+  if (m.type === "wpa:done" && m.summary) {
     showLinks(m.summary);
     showToast(
       `同步完成 · 新增 ${m.summary.added} · 合计 ${m.summary.total}`,
       "ok",
     );
+    setBusy(false);
   }
 });
 
@@ -314,6 +385,7 @@ tabSync.addEventListener("click", () => showView("sync"));
 tabSettings.addEventListener("click", () => showView("settings"));
 btnSave.addEventListener("click", onSave);
 btnClear.addEventListener("click", onClear);
+btnClearLog.addEventListener("click", onClearLog);
 btnSync.addEventListener("click", async () => {
   if (!(await confirmMpBeforeSync("incremental"))) return;
   onSync("incremental");
@@ -331,5 +403,6 @@ window.addEventListener("focus", () => {
 });
 
 hydrateByok();
+hydrateSession();
 showView("sync");
 refreshMpStatus({ toastIfMissing: true });
